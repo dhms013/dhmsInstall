@@ -17,18 +17,7 @@ install_gum() {
     fi
 
     echo "[INFO] Installing gum..."
-    
-    local gum_ver="0.14.5"
-    local gum_url="https://github.com/charmbracelet/gum/releases/download/v${gum_ver}/gum_${gum_ver}_linux_amd64.tar.gz"
-    
-    cd /tmp
-    curl -fsSL "$gum_url" -o gum.tar.gz
-    tar -xzf gum.tar.gz
-    mv gum /usr/local/bin/gum
-    chmod +x /usr/local/bin/gum
-    rm -f gum.tar.gz LICENSE README.md
-    
-    cd - >/dev/null
+    pacman -Sy --noconfirm gum
     GUM_INSTALLED=true
     echo "[OK] gum installed"
 }
