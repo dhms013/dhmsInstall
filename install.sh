@@ -254,17 +254,56 @@ configure() {
     
     echo ""
     print_section "Drive Selection"
+    echo "Available drives:"
+    echo ""
     
-    DRIVE=$(lsblk -d -n -o NAME | grep -E '^(sd|nvme|vd)' | head -1)
-    DRIVE="/dev/$DRIVE"
+    local drives=()
+    local drive_size=()
+    local drive_model=()
+    local i=0
     
-    if [[ ! -b "$DRIVE" ]]; then
-        error "No drive found"
+    while read -r name size type model; do
+        [[ -z "$name" ]] && continue
+        [[ "$type" == "rom" ]] && continue
+        [[ "$type" == "loop" ]] && continue
+        [[ "$name" =~ ^loop ]] && continue
+        [[ "$name" =~ ^sr ]] && continue
+        [[ "$name" =~ ^dm- ]] && continue
+        
+        drives+=("/dev/$name")
+        drive_size+=("$size")
+        drive_model+=("$model")
+        echo "  $((i+1)). /dev/$name ($size)"
+        [[ -n "$model" ]] && echo "      $model"
+        ((i++))
+    done < <(lsblk -d -n -o NAME,SIZE,TYPE,MODEL 2>/dev/null)
+    
+    local drive_count=${#drives[@]}
+    
+    if [[ $drive_count -eq 0 ]]; then
+        error "No drives found"
         exit 1
     fi
     
+    local selected_num
+    selected_num=$(gum input --placeholder "1" --header "Select drive number (1-$drive_count)")
+    : "${selected_num:=1}"
+    
+    if [[ "$selected_num" -lt 1 ]] || [[ "$selected_num" -gt "$drive_count" ]]; then
+        selected_num=1
+    fi
+    
+    DRIVE="${drives[$((selected_num-1))]}"
+    
+    if [[ ! -b "$DRIVE" ]]; then
+        error "Invalid drive selection"
+        exit 1
+    fi
+    
+    echo ""
+    gum style --border double --padding "1" --foreground 196 "⚠️  WARNING: $DRIVE will be wiped!"
     print_config "Drive" "$DRIVE"
-    print_config "Wipe" "Yes (automatic)"
+    print_config "Wipe" "Yes"
     WIPE_DRIVE="true"
 }
 
