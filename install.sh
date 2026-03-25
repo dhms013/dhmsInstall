@@ -99,7 +99,10 @@ configure() {
     echo "Select your preferred language:"
     
     locales=(
-        "en_US.UTF-8 (English, US)"
+        "en_US.UTF-8 (English, US) ⭐"
+    )
+    
+    other_locales=(
         "en_GB.UTF-8 (English, UK)"
         "en_AU.UTF-8 (English, Australia)"
         "de_DE.UTF-8 (German, Germany)"
@@ -124,8 +127,9 @@ configure() {
         "nl_NL.UTF-8 (Dutch, Netherlands)"
     )
     
-    IFS=$'\n' sorted_locales=($(sort <<<"${locales[*]}")); unset IFS
-    LOCALE_CHOICE=$(printf '%s\n' "${sorted_locales[@]}" | gum choose --header "Language" --cursor "> ")
+    IFS=$'\n' sorted_other=($(sort <<<"${other_locales[*]}")); unset IFS
+    all_locales=("${locales[@]}" "${sorted_other[@]}")
+    LOCALE_CHOICE=$(printf '%s\n' "${all_locales[@]}" | gum choose --header "Language" --cursor "> ")
     LOCALE="${LOCALE_CHOICE%% (*}"
     print_config "Language" "$LOCALE"
     
@@ -172,7 +176,10 @@ configure() {
     echo "Select your keyboard layout:"
     
     keyboards=(
-        "us (US English)"
+        "us (US English) ⭐"
+    )
+    
+    other_keyboards=(
         "uk (UK English)"
         "de (German)"
         "fr (French)"
@@ -185,8 +192,9 @@ configure() {
         "dvorak (Dvorak)"
     )
     
-    IFS=$'\n' sorted_keyboards=($(sort <<<"${keyboards[*]}")); unset IFS
-    KEYBOARD_CHOICE=$(printf '%s\n' "${sorted_keyboards[@]}" | gum choose --header "Keyboard" --cursor "> ")
+    IFS=$'\n' sorted_other=($(sort <<<"${other_keyboards[*]}")); unset IFS
+    all_keyboards=("${keyboards[@]}" "${sorted_other[@]}")
+    KEYBOARD_CHOICE=$(printf '%s\n' "${all_keyboards[@]}" | gum choose --header "Keyboard" --cursor "> ")
     KEYBOARD="${KEYBOARD_CHOICE%% (*}"
     print_config "Keyboard" "$KEYBOARD"
     
@@ -263,8 +271,7 @@ configure() {
     
     echo ""
     gum style --border double --padding "1" --foreground 196 "⚠️  WARNING: This will wipe the drive!"
-    WIPE_CHOICE=$(gum confirm --default=false --affirmative "Yes, wipe drive" --negative "No, keep data" "Wipe drive completely?")
-    WIPE_DRIVE="$WIPE_CHOICE"
+    gum confirm --default=false --affirmative "Yes, wipe drive" --negative "No, keep data" "Wipe drive completely?" && WIPE_DRIVE="true" || WIPE_DRIVE="false"
     print_config "Wipe" "$( [ "$WIPE_DRIVE" = "true" ] && echo "Yes" || echo "No" )"
 }
 
@@ -292,13 +299,10 @@ show_summary() {
         "  Kernel:       linux-zen" \
         ""
     
-    local confirm
-    confirm=$(gum confirm --default=false --affirmative "Proceed" --negative "Cancel" "Proceed with installation?")
-    
-    if [[ "$confirm" != "true" ]]; then
+    gum confirm --default=false --affirmative "Proceed" --negative "Cancel" "Proceed with installation?" || {
         info "Installation cancelled"
         exit 0
-    fi
+    }
 }
 
 partition() {
@@ -568,12 +572,7 @@ main() {
         "  Reboot and enjoy your new Arch Linux system.  " \
         ""
     
-    local reboot_now
-    reboot_now=$(gum confirm --default=true --affirmative "Reboot" --negative "Stay" "Reboot now?")
-    
-    if [[ "$reboot_now" == "true" ]]; then
-        reboot
-    fi
+    gum confirm --default=true --affirmative "Reboot" --negative "Stay" "Reboot now?" && reboot
 }
 
 main "$@"
