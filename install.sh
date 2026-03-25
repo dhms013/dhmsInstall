@@ -563,16 +563,14 @@ main() {
         install_limine
         run_post_install
         cleanup
-    } | gum spin --spinner line -- "Installing..." --show-output
+    } | gum spin --title "Installing..." --show-output --spinner line
     
     gum style --border thick --padding "2" \
         "" \
         "  ✅ Installation completed successfully!  " \
         "" \
-        "  Reboot and enjoy your new Arch Linux system.  " \
+        "  dhmsDots will reboot when setup is complete  " \
         ""
-    
-    gum confirm --default=true --affirmative "Reboot" --negative "Stay" "Reboot now?" && reboot
 }
 
 main "$@"
