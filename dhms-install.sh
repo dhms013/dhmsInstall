@@ -8,10 +8,59 @@ set -euo pipefail
 
 POST_INSTALL_URL="https://raw.githubusercontent.com/dhms013/dhmsDots/main/install.sh"
 
-info() { gum log --level info "$1"; }
-warn() { gum log --level warn "$1"; }
-error() { gum log --level error "$1"; }
-success() { gum log --level info "✓ $1"; }
+GUM_INSTALLED=false
+
+install_gum() {
+    if command -v gum &>/dev/null; then
+        GUM_INSTALLED=true
+        return 0
+    fi
+
+    echo "[INFO] Installing gum..."
+    
+    local gum_ver="0.14.5"
+    local gum_url="https://github.com/charmbracelet/gum/releases/download/v${gum_ver}/gum_${gum_ver}_linux_amd64.tar.gz"
+    
+    cd /tmp
+    curl -fsSL "$gum_url" -o gum.tar.gz
+    tar -xzf gum.tar.gz
+    mv gum /usr/local/bin/gum
+    chmod +x /usr/local/bin/gum
+    rm -f gum.tar.gz LICENSE README.md
+    
+    cd - >/dev/null
+    GUM_INSTALLED=true
+    echo "[OK] gum installed"
+}
+
+info() { 
+    if command -v gum &>/dev/null; then
+        gum log --level info "$1"
+    else
+        echo "[INFO] $1"
+    fi
+}
+warn() { 
+    if command -v gum &>/dev/null; then
+        gum log --level warn "$1"
+    else
+        echo "[WARN] $1"
+    fi
+}
+error() { 
+    if command -v gum &>/dev/null; then
+        gum log --level error "$1"
+    else
+        echo "[ERROR] $1"
+    fi
+}
+success() { 
+    if command -v gum &>/dev/null; then
+        gum log --level info "✓ $1"
+    else
+        echo "[OK] $1"
+    fi
+}
 
 check_root() {
     if [[ $EUID -ne 0 ]]; then
@@ -25,27 +74,6 @@ check_arch() {
         error "This script must be run from Arch Linux live environment"
         exit 1
     fi
-}
-
-install_gum() {
-    if command -v gum &>/dev/null; then
-        return 0
-    fi
-
-    info "Installing gum..."
-    
-    local gum_ver="0.14.5"
-    local gum_url="https://github.com/charmbracelet/gum/releases/download/v${gum_ver}/gum_${gum_ver}_linux_amd64.tar.gz"
-    
-    cd /tmp
-    curl -fsSL "$gum_url" -o gum.tar.gz
-    tar -xzf gum.tar.gz
-    mv gum /usr/local/bin/gum
-    chmod +x /usr/local/bin/gum
-    rm -f gum.tar.gz LICENSE README.md
-    
-    cd - >/dev/null
-    success "gum installed"
 }
 
 detect_gpu() {
