@@ -419,7 +419,7 @@ main() {
         install_limine
         run_post_install
         cleanup
-    } | gum spin --spinner line --title "Installing..." --show-output
+    } | gum spin --spinner line -- "Installing..." --show-output
     
     gum style --border thick --padding "2" \
         "" \
