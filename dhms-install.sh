@@ -132,7 +132,9 @@ configure_installation() {
 
 show_summary() {
     echo ""
-    gum style --border double --padding "1 2" --title "Installation Summary" \
+    gum style --border double --padding "1 2" \
+        " Installation Summary " \
+        "" \
         "Hostname:     $HOSTNAME" \
         "Username:     $USERNAME" \
         "Drive:        $DRIVE" \
@@ -141,7 +143,7 @@ show_summary() {
         "Timezone:     $TIMEZONE" \
         "Keyboard:     $KEYBOARD" \
         "Mirror:       $MIRROR_REGION" \
-        "GPU Driver:  $GPU_DRIVER" \
+        "GPU Driver:   $GPU_DRIVER" \
         "Kernel:       linux-zen"
     
     local confirm
@@ -396,7 +398,7 @@ main() {
     check_arch
     install_gum
     
-    gum style --border thick --padding "2" --title "dhms-install" \
+    gum style --border thick --padding "2" \
         "" \
         "  Arch Linux Installer (Hyprland Edition)  " \
         "" \
@@ -419,7 +421,7 @@ main() {
         cleanup
     } | gum spin --spinner line --title "Installing..." --show-output
     
-    gum style --border thick --padding "2" --title "Success!" \
+    gum style --border thick --padding "2" \
         "" \
         "  ✅ Installation completed successfully!  " \
         "" \
