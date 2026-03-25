@@ -48,32 +48,54 @@ detect_gpu() {
     fi
 }
 
-select_from_list() {
+print_banner() {
+    gum style --border thick --padding "2" \
+        "" \
+        "  Arch Linux Installer (Hyprland Edition)  " \
+        "" \
+        "  ⚠️  EXPERIMENTAL - USE AT YOUR OWN RISK ⚠️  " \
+        ""
+}
+
+print_section() {
     local title="$1"
-    shift
-    local items=("$@")
-    
-    printf '%s\n' "${items[@]}" | gum choose --header "$title" --cursor "> " --selected "[x]"
+    gum style --border normal --padding "1" "$title"
+}
+
+print_config() {
+    local key="$1"
+    local value="$2"
+    gum style --faint "  $key:" && echo " $value"
 }
 
 configure() {
-    HOSTNAME=$(gum input --placeholder "archlinux" --value "archlinux" --header "Hostname")
+    echo ""
+    print_section "Hostname"
+    HOSTNAME=$(gum input --placeholder "archlinux" --header "Enter hostname")
     : "${HOSTNAME:=archlinux}"
-    
-    USERNAME=$(gum input --placeholder "arch" --value "arch" --header "Username")
-    : "${USERNAME:=arch}"
-    
-    USER_PASSWORD=$(gum input --password --placeholder "User password" --header "Password")
-    while [[ -z "$USER_PASSWORD" ]]; do
-        warn "Password cannot be empty"
-        USER_PASSWORD=$(gum input --password --placeholder "User password" --header "Password")
-    done
-    
-    ROOT_PASSWORD=$(gum input --password --placeholder "Root password (Enter for same)" --header "Root Password")
-    : "${ROOT_PASSWORD:=$USER_PASSWORD}"
+    print_config "Hostname" "$HOSTNAME"
     
     echo ""
-    gum style --border normal --padding "1 2" "Language Selection"
+    print_section "Username"
+    USERNAME=$(gum input --placeholder "arch" --header "Enter username")
+    : "${USERNAME:=arch}"
+    print_config "Username" "$USERNAME"
+    
+    echo ""
+    print_section "Password"
+    USER_PASSWORD=$(gum input --password --placeholder "User password" --header "Enter password")
+    while [[ -z "$USER_PASSWORD" ]]; do
+        warn "Password cannot be empty"
+        USER_PASSWORD=$(gum input --password --placeholder "User password" --header "Enter password")
+    done
+    print_config "Password" "********"
+    
+    ROOT_PASSWORD=$(gum input --password --placeholder "Root password (Enter for same)" --header "Enter root password")
+    : "${ROOT_PASSWORD:=$USER_PASSWORD}"
+    print_config "Root password" "********"
+    
+    echo ""
+    print_section "Language"
     echo "Select your preferred language:"
     
     locales=(
@@ -103,11 +125,12 @@ configure() {
     )
     
     IFS=$'\n' sorted_locales=($(sort <<<"${locales[*]}")); unset IFS
-    LOCALE_CHOICE=$(select_from_list "Language" "${sorted_locales[@]}")
+    LOCALE_CHOICE=$(printf '%s\n' "${sorted_locales[@]}" | gum choose --header "Language" --cursor "> ")
     LOCALE="${LOCALE_CHOICE%% (*}"
+    print_config "Language" "$LOCALE"
     
     echo ""
-    gum style --border normal --padding "1 2" "Timezone Selection"
+    print_section "Timezone"
     echo "Select your timezone:"
     
     timezones=(
@@ -140,11 +163,12 @@ configure() {
     )
     
     IFS=$'\n' sorted_timezones=($(sort <<<"${timezones[*]}")); unset IFS
-    TIMEZONE_CHOICE=$(select_from_list "Timezone" "${sorted_timezones[@]}")
+    TIMEZONE_CHOICE=$(printf '%s\n' "${sorted_timezones[@]}" | gum choose --header "Timezone" --cursor "> ")
     TIMEZONE="${TIMEZONE_CHOICE%% (*}"
+    print_config "Timezone" "$TIMEZONE"
     
     echo ""
-    gum style --border normal --padding "1 2" "Keyboard Layout"
+    print_section "Keyboard Layout"
     echo "Select your keyboard layout:"
     
     keyboards=(
@@ -162,89 +186,37 @@ configure() {
     )
     
     IFS=$'\n' sorted_keyboards=($(sort <<<"${keyboards[*]}")); unset IFS
-    KEYBOARD_CHOICE=$(select_from_list "Keyboard" "${sorted_keyboards[@]}")
+    KEYBOARD_CHOICE=$(printf '%s\n' "${sorted_keyboards[@]}" | gum choose --header "Keyboard" --cursor "> ")
     KEYBOARD="${KEYBOARD_CHOICE%% (*}"
+    print_config "Keyboard" "$KEYBOARD"
     
     echo ""
-    gum style --border normal --padding "1 2" "Mirror Region"
+    print_section "Mirror Region"
     echo "Select the mirror region (closest to you):"
     
     mirror_regions=(
-        "Argentina"
-        "Australia"
-        "Austria"
-        "Bangladesh"
-        "Belarus"
-        "Belgium"
-        "Bolivia"
-        "Brazil"
-        "Bulgaria"
-        "Canada"
-        "Chile"
-        "China"
-        "Colombia"
-        "Costa Rica"
-        "Croatia"
-        "Czech Republic"
-        "Denmark"
-        "Ecuador"
-        "Finland"
-        "France"
-        "Germany"
-        "Greece"
-        "Hungary"
-        "Iceland"
-        "India"
-        "Indonesia"
-        "Iran"
-        "Ireland"
-        "Israel"
-        "Italy"
-        "Japan"
-        "Kazakhstan"
-        "Kenya"
-        "Latvia"
-        "Lithuania"
-        "Luxembourg"
-        "Macedonia"
-        "Malaysia"
-        "Mexico"
-        "Netherlands"
-        "New Zealand"
-        "Nicaragua"
-        "Norway"
-        "Pakistan"
-        "Paraguay"
-        "Peru"
-        "Philippines"
-        "Poland"
-        "Portugal"
-        "Romania"
-        "Russia"
-        "Serbia"
-        "Singapore"
-        "Slovakia"
-        "Slovenia"
-        "South Africa"
-        "South Korea"
-        "Spain"
-        "Sweden"
-        "Switzerland"
-        "Taiwan"
-        "Thailand"
-        "Turkey"
-        "Ukraine"
-        "United Kingdom"
-        "United States"
-        "Uruguay"
-        "Vietnam"
+        "Argentina" "Australia" "Austria" "Bangladesh" "Belarus"
+        "Belgium" "Bolivia" "Brazil" "Bulgaria" "Canada"
+        "Chile" "China" "Colombia" "Costa Rica" "Croatia"
+        "Czech Republic" "Denmark" "Ecuador" "Finland" "France"
+        "Germany" "Greece" "Hungary" "Iceland" "India"
+        "Indonesia" "Iran" "Ireland" "Israel" "Italy"
+        "Japan" "Kazakhstan" "Kenya" "Latvia" "Lithuania"
+        "Luxembourg" "Macedonia" "Malaysia" "Mexico" "Netherlands"
+        "New Zealand" "Nicaragua" "Norway" "Pakistan" "Paraguay"
+        "Peru" "Philippines" "Poland" "Portugal" "Romania"
+        "Russia" "Serbia" "Singapore" "Slovakia" "Slovenia"
+        "South Africa" "South Korea" "Spain" "Sweden" "Switzerland"
+        "Taiwan" "Thailand" "Turkey" "Ukraine" "United Kingdom"
+        "United States" "Uruguay" "Vietnam"
     )
     
     IFS=$'\n' sorted_mirrors=($(sort <<<"${mirror_regions[*]}")); unset IFS
-    MIRROR_REGION=$(select_from_list "Mirror" "${sorted_mirrors[@]}")
+    MIRROR_REGION=$(printf '%s\n' "${sorted_mirrors[@]}" | gum choose --header "Mirror" --cursor "> ")
+    print_config "Mirror" "$MIRROR_REGION"
     
     echo ""
-    gum style --border normal --padding "1 2" "GPU Driver"
+    print_section "GPU Driver"
     echo "Select your GPU driver:"
     
     gpu_options=(
@@ -255,7 +227,7 @@ configure() {
         "NVIDIA (Proprietary)"
     )
     
-    GPU_CHOICE=$(select_from_list "GPU" "${gpu_options[@]}")
+    GPU_CHOICE=$(printf '%s\n' "${gpu_options[@]}" | gum choose --header "GPU" --cursor "> ")
     
     case "$GPU_CHOICE" in
         "NVIDIA (Proprietary)") GPU_DRIVER="nvidia" ;;
@@ -264,16 +236,17 @@ configure() {
         "Intel (Open Source)") GPU_DRIVER="intel" ;;
         *) detect_gpu ;;
     esac
+    print_config "GPU Driver" "$GPU_DRIVER"
     
     echo ""
-    gum style --border normal --padding "1 2" "Drive Selection"
+    print_section "Drive Selection"
     echo "Available drives:"
-    lsblk -d -n -o NAME,SIZE,TYPE,MODEL | awk '{print $1": "$2" ("$3")"}'
+    lsblk -d -n -o NAME,SIZE,TYPE,MODEL | awk '{print "  " $1 ": " $2 " (" $3 ")"}'
     
     local drive_count
     drive_count=$(lsblk -d -n -o NAME | wc -l)
     
-    DRIVE_NUM=$(gum input --placeholder "1" --value "1" --header "Drive Number (1-$drive_count)")
+    DRIVE_NUM=$(gum input --placeholder "1" --header "Drive number (1-$drive_count)")
     : "${DRIVE_NUM:=1}"
     
     if [[ "$DRIVE_NUM" -lt 1 ]] || [[ "$DRIVE_NUM" -gt "$drive_count" ]]; then
@@ -286,32 +259,41 @@ configure() {
         error "Invalid drive selection"
         exit 1
     fi
+    print_config "Drive" "$DRIVE"
     
-    gum style --border normal --padding "1 2" "WARNING!"
-    echo "Drive: $DRIVE"
     echo ""
-    WIPE_CHOICE=$(gum confirm --default=false --affirm "Yes, wipe drive" --dismiss "No, keep data" "Wipe drive completely?")
+    gum style --border double --padding "1" --foreground 196 "⚠️  WARNING: This will wipe the drive!"
+    WIPE_CHOICE=$(gum confirm --default=false --affirmative "Yes, wipe drive" --negative "No, keep data" "Wipe drive completely?")
     WIPE_DRIVE="$WIPE_CHOICE"
+    print_config "Wipe" "$( [ "$WIPE_DRIVE" = "true" ] && echo "Yes" || echo "No" )"
 }
 
 show_summary() {
+    clear
+    gum style --border thick --padding "2" \
+        "" \
+        "  Installation Summary  " \
+        "" \
+        "  Please review your configuration  " \
+        ""
+    
     echo ""
     gum style --border double --padding "1 2" \
-        " Installation Summary " \
         "" \
-        "Hostname:     $HOSTNAME" \
-        "Username:     $USERNAME" \
-        "Drive:        $DRIVE" \
-        "Wipe:         $([ "$WIPE_DRIVE" = "true" ] && echo "Yes" || echo "No")" \
-        "Locale:       $LOCALE" \
-        "Timezone:     $TIMEZONE" \
-        "Keyboard:     $KEYBOARD" \
-        "Mirror:       $MIRROR_REGION" \
-        "GPU Driver:   $GPU_DRIVER" \
-        "Kernel:       linux-zen"
+        "  Hostname:     $HOSTNAME" \
+        "  Username:     $USERNAME" \
+        "  Drive:        $DRIVE" \
+        "  Wipe:         $([ "$WIPE_DRIVE" = "true" ] && echo "Yes" || echo "No")" \
+        "  Locale:       $LOCALE" \
+        "  Timezone:     $TIMEZONE" \
+        "  Keyboard:     $KEYBOARD" \
+        "  Mirror:       $MIRROR_REGION" \
+        "  GPU Driver:   $GPU_DRIVER" \
+        "  Kernel:       linux-zen" \
+        ""
     
     local confirm
-    confirm=$(gum confirm --default=false --affirm "Proceed" --dismiss "Cancel" "Proceed with installation?")
+    confirm=$(gum confirm --default=false --affirmative "Proceed" --negative "Cancel" "Proceed with installation?")
     
     if [[ "$confirm" != "true" ]]; then
         info "Installation cancelled"
@@ -562,13 +544,7 @@ main() {
     check_arch
     install_gum
     
-    gum style --border thick --padding "2" \
-        "" \
-        "  Arch Linux Installer (Hyprland Edition)  " \
-        "" \
-        "  ⚠️  EXPERIMENTAL - USE AT YOUR OWN RISK ⚠️  " \
-        ""
-    
+    print_banner
     configure
     show_summary
     
@@ -593,7 +569,7 @@ main() {
         ""
     
     local reboot_now
-    reboot_now=$(gum confirm --default=true --affirm "Reboot" --dismiss "Stay" "Reboot now?")
+    reboot_now=$(gum confirm --default=true --affirmative "Reboot" --negative "Stay" "Reboot now?")
     
     if [[ "$reboot_now" == "true" ]]; then
         reboot
