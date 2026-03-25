@@ -26,9 +26,9 @@ This project provides an automated installation script for Arch Linux with Hyprl
 - **Desktop**: Hyprland (Wayland compositor)
 - **Audio**: PipeWire with wireplumber
 - **Bluetooth**: Bluez with bluetooth.service enabled
-- **Network**: NetworkManager (copied from ISO setup)
+- **Network**: Copy from ISO setup (systemd-networkd + systemd-resolved)
 - **Filesystem**: ext4 with zram swap
-- **Bootloader**: GRUB
+- **Bootloader**: Limine
 - **Post-install**: Automatic dotfiles setup on first login
 
 ### Included Packages (from archinstall Hyprland profile)
@@ -46,7 +46,7 @@ qt5-wayland, qt6-wayland, polkit-kde-agent, grim, slurp, sddm
 
 ```bash
 # Boot into Arch Linux live environment and run:
-curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/dhmsInstall/main/arch-hyprland-install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/dhms013/dhmsInstall/main/arch-hyprland-install.sh | bash
 ```
 
 The script will:
@@ -78,7 +78,7 @@ On first login, the dotfiles installer will run automatically to set up your Hyp
 - Arch Linux live environment ( booted from ISO )
 - Internet connection
 - Minimum 30GB free disk space
-- UEFI system (for GRUB bootloader)
+- UEFI system (for Limine bootloader)
 
 ---
 

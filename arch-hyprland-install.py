@@ -208,7 +208,7 @@ class ArchInstaller:
 
                 installation.setup_swap(algo=ZramAlgorithm.ZSTD)
 
-                installation.add_bootloader(Bootloader.Grub, uki=False, removable=False)
+                installation.add_bootloader(Bootloader.Limine, uki=False, removable=False)
 
                 network_config = NetworkConfiguration(
                     type=NicType.ISO,

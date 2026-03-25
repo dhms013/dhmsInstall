@@ -1,11 +1,11 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
 # Arch Hyprland Installer Bootstrap
-# Usage: curl -fsSL https://raw.githubusercontent.com/dhms013/dhmsDots/main/arch-hyprland-install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/dhms013/dhmsInstall/main/arch-hyprland-install.sh | bash
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
-PYTHON_SCRIPT_URL="https://raw.githubusercontent.com/dhms013/dhmsDots/main/arch-hyprland-install.py"
+PYTHON_SCRIPT_URL="https://raw.githubusercontent.com/dhms013/dhmsInstall/main/arch-hyprland-install.py"
 
 info() { echo -e "\033[0;36m[INFO]\033[0m $1"; }
 warn() { echo -e "\033[1;33m[WARN]\033[0m $1"; }
