@@ -60,7 +60,7 @@ System:
 
 ```bash
 # Boot into Arch Linux live environment and run:
-curl -fsSL https://raw.githubusercontent.com/dhms013/dhmsDots/main/dhms-install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/dhms013/dhmsInstall/main/dhms-install.sh | bash
 ```
 
 The script will:
