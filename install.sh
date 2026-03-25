@@ -248,43 +248,18 @@ configure() {
     
     echo ""
     print_section "Drive Selection"
-    echo "Available drives:"
     
-    mapfile -t DRIVES < <(lsblk -d -n -o NAME,SIZE,TYPE,MODEL | grep -E '^(sd|nvme|vd|dasd)' | awk '{print $1":"$2":"$3":"$4}')
-    
-    for i in "${!DRIVES[@]}"; do
-        IFS=':' read -r name size type model <<< "${DRIVES[$i]}"
-        echo "  $((i+1)). /dev/$name ($size)"
-        [[ -n "$model" ]] && echo "     Model: $model"
-    done
-    
-    local drive_count=${#DRIVES[@]}
-    
-    if [[ $drive_count -eq 0 ]]; then
-        error "No drives found"
-        exit 1
-    fi
-    
-    DRIVE_NUM=$(gum input --placeholder "1" --header "Drive number (1-$drive_count)")
-    : "${DRIVE_NUM:=1}"
-    
-    if [[ "$DRIVE_NUM" -lt 1 ]] || [[ "$DRIVE_NUM" -gt "$drive_count" ]]; then
-        DRIVE_NUM=1
-    fi
-    
-    IFS=':' read -r name size type model <<< "${DRIVES[$((DRIVE_NUM-1))]}"
-    DRIVE="/dev/$name"
+    DRIVE=$(lsblk -d -n -o NAME | grep -E '^(sd|nvme|vd)' | head -1)
+    DRIVE="/dev/$DRIVE"
     
     if [[ ! -b "$DRIVE" ]]; then
-        error "Invalid drive selection"
+        error "No drive found"
         exit 1
     fi
-    print_config "Drive" "$DRIVE"
     
-    echo ""
-    gum style --border double --padding "1" --foreground 196 "⚠️  WARNING: This will wipe the drive!"
-    gum confirm --default=false --affirmative "Yes, wipe drive" --negative "No, keep data" "Wipe drive completely?" && WIPE_DRIVE="true" || WIPE_DRIVE="false"
-    print_config "Wipe" "$( [ "$WIPE_DRIVE" = "true" ] && echo "Yes" || echo "No" )"
+    print_config "Drive" "$DRIVE"
+    print_config "Wipe" "Yes (automatic)"
+    WIPE_DRIVE="true"
 }
 
 show_summary() {
@@ -299,10 +274,11 @@ show_summary() {
     echo ""
     gum style --border double --padding "1 2" \
         "" \
+        "  ⚠️  WARNING: Drive will be wiped!  " \
+        "" \
         "  Hostname:     $HOSTNAME" \
         "  Username:     $USERNAME" \
         "  Drive:        $DRIVE" \
-        "  Wipe:         $([ "$WIPE_DRIVE" = "true" ] && echo "Yes" || echo "No")" \
         "  Locale:       $LOCALE" \
         "  Timezone:     $TIMEZONE" \
         "  Keyboard:     $KEYBOARD" \
@@ -319,11 +295,8 @@ show_summary() {
 
 partition() {
     info "Partitioning $DRIVE..."
-    
-    if [[ "$WIPE_DRIVE" == "true" ]]; then
-        wipefs -af "$DRIVE" 2>/dev/null || true
-        dd if=/dev/zero of="$DRIVE" bs=512 count=1 2>/dev/null || true
-    fi
+    wipefs -af "$DRIVE" 2>/dev/null || true
+    dd if=/dev/zero of="$DRIVE" bs=512 count=1 2>/dev/null || true
     
     parted -s "$DRIVE" mklabel gpt
     parted -s "$DRIVE" mkpart primary fat32 1MiB 513MiB
