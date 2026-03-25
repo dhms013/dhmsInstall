@@ -1,14 +1,14 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
-# dhms-install.sh — Opinionated Arch Linux Installer with Hyprland
+# install.sh — Opinionated Arch Linux Installer with Hyprland
 # ─────────────────────────────────────────────────────────────────────────────
-# Usage: curl -fsSL https://raw.githubusercontent.com/dhms013/dhmsDots/main/dhms-install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/dhms013/dhmsInstall/main/install.sh | bash
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
 # Determine script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-POST_INSTALL_URL="https://raw.githubusercontent.com/dhms013/dhmsDots/main/install.sh"
+POST_INSTALL_URL="https://raw.githubusercontent.com/dhms013/dhmsInstall/main/install.sh"
 
 # Source libraries
 source "${SCRIPT_DIR}/lib/logger.sh"
