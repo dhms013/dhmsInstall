@@ -102,23 +102,7 @@ The dhmsDots installer runs automatically during installation (in chroot). After
 ```
 dhmsInstall/
 ├── README.md
-├── install.sh                 # Main installer script
-├── lib/                      # Libraries
-│   ├── gum.sh
-│   └── logger.sh
-└── steps/                    # Installation steps
-    ├── 00-check.sh
-    ├── 01-config.sh
-    ├── 02-partition.sh
-    ├── 03-base.sh
-    ├── 04-network.sh
-    ├── 05-system.sh
-    ├── 06-users.sh
-    ├── 07-packages.sh
-    ├── 08-swap.sh
-    ├── 09-bootloader.sh
-    ├── 10-postinstall.sh
-    └── 99-cleanup.sh
+└── install.sh                # Single-file installer (curl | bash)
 ```
 
 ---
