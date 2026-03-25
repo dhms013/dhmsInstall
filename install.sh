@@ -8,16 +8,12 @@ set -euo pipefail
 
 POST_INSTALL_URL="https://raw.githubusercontent.com/dhms013/dhmsInstall/main/install.sh"
 
-GUM_INSTALLED=false
-
 install_gum() {
     if command -v gum &>/dev/null; then
-        GUM_INSTALLED=true
         return 0
     fi
     echo "[INFO] Installing gum..."
     pacman -Sy --noconfirm gum
-    GUM_INSTALLED=true
     echo "[OK] gum installed"
 }
 
@@ -52,6 +48,14 @@ detect_gpu() {
     fi
 }
 
+select_from_list() {
+    local title="$1"
+    shift
+    local items=("$@")
+    
+    printf '%s\n' "${items[@]}" | gum choose --header "$title" --cursor "> " --selected "[x]"
+}
+
 configure() {
     HOSTNAME=$(gum input --placeholder "archlinux" --value "archlinux" --header "Hostname")
     : "${HOSTNAME:=archlinux}"
@@ -68,66 +72,190 @@ configure() {
     ROOT_PASSWORD=$(gum input --password --placeholder "Root password (Enter for same)" --header "Root Password")
     : "${ROOT_PASSWORD:=$USER_PASSWORD}"
     
+    echo ""
+    gum style --border normal --padding "1 2" "Language Selection"
+    echo "Select your preferred language:"
+    
     locales=(
-        "en_US.UTF-8" "en_GB.UTF-8" "en_AU.UTF-8"
-        "de_DE.UTF-8" "de_AT.UTF-8" "de_CH.UTF-8"
-        "fr_FR.UTF-8" "fr_CA.UTF-8"
-        "es_ES.UTF-8" "es_MX.UTF-8"
-        "pt_BR.UTF-8" "pt_PT.UTF-8"
-        "it_IT.UTF-8"
-        "ru_RU.UTF-8"
-        "ja_JP.UTF-8"
-        "zh_CN.UTF-8" "zh_TW.UTF-8"
-        "ko_KR.UTF-8"
-        "id_ID.UTF-8"
-        "th_TH.UTF-8"
-        "tr_TR.UTF-8"
-        "pl_PL.UTF-8"
-        "nl_NL.UTF-8"
+        "en_US.UTF-8 (English, US)"
+        "en_GB.UTF-8 (English, UK)"
+        "en_AU.UTF-8 (English, Australia)"
+        "de_DE.UTF-8 (German, Germany)"
+        "de_AT.UTF-8 (German, Austria)"
+        "de_CH.UTF-8 (German, Switzerland)"
+        "fr_FR.UTF-8 (French, France)"
+        "fr_CA.UTF-8 (French, Canada)"
+        "es_ES.UTF-8 (Spanish, Spain)"
+        "es_MX.UTF-8 (Spanish, Mexico)"
+        "pt_BR.UTF-8 (Portuguese, Brazil)"
+        "pt_PT.UTF-8 (Portuguese, Portugal)"
+        "it_IT.UTF-8 (Italian, Italy)"
+        "ru_RU.UTF-8 (Russian, Russia)"
+        "ja_JP.UTF-8 (Japanese, Japan)"
+        "zh_CN.UTF-8 (Chinese, Simplified)"
+        "zh_TW.UTF-8 (Chinese, Traditional)"
+        "ko_KR.UTF-8 (Korean, South Korea)"
+        "id_ID.UTF-8 (Indonesian, Indonesia)"
+        "th_TH.UTF-8 (Thai, Thailand)"
+        "tr_TR.UTF-8 (Turkish, Turkey)"
+        "pl_PL.UTF-8 (Polish, Poland)"
+        "nl_NL.UTF-8 (Dutch, Netherlands)"
     )
     
-    LOCALE=$(gum choose --header "Locale" --cursor "● " --selected "○ " "${locales[@]}")
-    : "${LOCALE:=en_US.UTF-8}"
+    IFS=$'\n' sorted_locales=($(sort <<<"${locales[*]}")); unset IFS
+    LOCALE_CHOICE=$(select_from_list "Language" "${sorted_locales[@]}")
+    LOCALE="${LOCALE_CHOICE%% (*}"
+    
+    echo ""
+    gum style --border normal --padding "1 2" "Timezone Selection"
+    echo "Select your timezone:"
     
     timezones=(
-        "America/New_York" "America/Chicago" "America/Denver" "America/Los_Angeles"
-        "America/Toronto" "America/Vancouver" "America/Mexico_City" "America/Sao_Paulo"
-        "Europe/London" "Europe/Paris" "Europe/Berlin" "Europe/Madrid" "Europe/Rome"
-        "Europe/Moscow" "Europe/Istanbul"
-        "Asia/Tokyo" "Asia/Shanghai" "Asia/Hong_Kong" "Asia/Taipei" "Asia/Seoul"
-        "Asia/Singapore" "Asia/Jakarta" "Asia/Bangkok"
-        "Australia/Sydney" "Australia/Perth"
-        "Pacific/Auckland"
+        "America/New_York (US Eastern)"
+        "America/Chicago (US Central)"
+        "America/Denver (US Mountain)"
+        "America/Los_Angeles (US Pacific)"
+        "America/Toronto (Canada Eastern)"
+        "America/Vancouver (Canada Pacific)"
+        "America/Mexico_City (Mexico)"
+        "America/Sao_Paulo (Brazil)"
+        "Europe/London (UK)"
+        "Europe/Paris (France)"
+        "Europe/Berlin (Germany)"
+        "Europe/Madrid (Spain)"
+        "Europe/Rome (Italy)"
+        "Europe/Moscow (Russia)"
+        "Europe/Istanbul (Turkey)"
+        "Asia/Tokyo (Japan)"
+        "Asia/Shanghai (China)"
+        "Asia/Hong_Kong (Hong Kong)"
+        "Asia/Taipei (Taiwan)"
+        "Asia/Seoul (South Korea)"
+        "Asia/Singapore (Singapore)"
+        "Asia/Jakarta (Indonesia)"
+        "Asia/Bangkok (Thailand)"
+        "Australia/Sydney (Australia Eastern)"
+        "Australia/Perth (Australia Western)"
+        "Pacific/Auckland (New Zealand)"
     )
     
-    TIMEZONE=$(gum choose --header "Timezone" --cursor "● " --selected "○ " "${timezones[@]}")
-    : "${TIMEZONE:=America/New_York}"
+    IFS=$'\n' sorted_timezones=($(sort <<<"${timezones[*]}")); unset IFS
+    TIMEZONE_CHOICE=$(select_from_list "Timezone" "${sorted_timezones[@]}")
+    TIMEZONE="${TIMEZONE_CHOICE%% (*}"
+    
+    echo ""
+    gum style --border normal --padding "1 2" "Keyboard Layout"
+    echo "Select your keyboard layout:"
     
     keyboards=(
-        "us" "us-acentos" "uk" "de" "de-latin1" "fr" "fr-latin9"
-        "es" "pt" "it" "ru" "jp" "br" "dvorak"
+        "us (US English)"
+        "uk (UK English)"
+        "de (German)"
+        "fr (French)"
+        "es (Spanish)"
+        "pt (Portuguese)"
+        "it (Italian)"
+        "ru (Russian)"
+        "jp (Japanese)"
+        "br (Brazilian)"
+        "dvorak (Dvorak)"
     )
     
-    KEYBOARD=$(gum choose --header "Keyboard Layout" --cursor "● " --selected "○ " "${keyboards[@]}")
-    : "${KEYBOARD:=us}"
+    IFS=$'\n' sorted_keyboards=($(sort <<<"${keyboards[*]}")); unset IFS
+    KEYBOARD_CHOICE=$(select_from_list "Keyboard" "${sorted_keyboards[@]}")
+    KEYBOARD="${KEYBOARD_CHOICE%% (*}"
+    
+    echo ""
+    gum style --border normal --padding "1 2" "Mirror Region"
+    echo "Select the mirror region (closest to you):"
     
     mirror_regions=(
-        "United_States" "Canada" "Mexico" "Brazil" "Colombia"
-        "Argentina" "Chile" "Peru" "United_Kingdom" "Germany"
-        "France" "Netherlands" "Spain" "Sweden" "Russia"
-        "Poland" "Japan" "China" "Taiwan" "Singapore"
-        "Australia" "New_Zealand" "India" "Indonesia" "Thailand"
+        "Argentina"
+        "Australia"
+        "Austria"
+        "Bangladesh"
+        "Belarus"
+        "Belgium"
+        "Bolivia"
+        "Brazil"
+        "Bulgaria"
+        "Canada"
+        "Chile"
+        "China"
+        "Colombia"
+        "Costa Rica"
+        "Croatia"
+        "Czech Republic"
+        "Denmark"
+        "Ecuador"
+        "Finland"
+        "France"
+        "Germany"
+        "Greece"
+        "Hungary"
+        "Iceland"
+        "India"
+        "Indonesia"
+        "Iran"
+        "Ireland"
+        "Israel"
+        "Italy"
+        "Japan"
+        "Kazakhstan"
+        "Kenya"
+        "Latvia"
+        "Lithuania"
+        "Luxembourg"
+        "Macedonia"
+        "Malaysia"
+        "Mexico"
+        "Netherlands"
+        "New Zealand"
+        "Nicaragua"
+        "Norway"
+        "Pakistan"
+        "Paraguay"
+        "Peru"
+        "Philippines"
+        "Poland"
+        "Portugal"
+        "Romania"
+        "Russia"
+        "Serbia"
+        "Singapore"
+        "Slovakia"
+        "Slovenia"
+        "South Africa"
+        "South Korea"
+        "Spain"
+        "Sweden"
+        "Switzerland"
+        "Taiwan"
+        "Thailand"
+        "Turkey"
+        "Ukraine"
+        "United Kingdom"
+        "United States"
+        "Uruguay"
+        "Vietnam"
     )
     
-    MIRROR_REGION=$(gum choose --header "Mirror Region" --cursor "● " --selected "○ " "${mirror_regions[@]}")
-    : "${MIRROR_REGION:=United_States}"
+    IFS=$'\n' sorted_mirrors=($(sort <<<"${mirror_regions[*]}")); unset IFS
+    MIRROR_REGION=$(select_from_list "Mirror" "${sorted_mirrors[@]}")
     
-    GPU_CHOICE=$(gum choose --header "GPU Driver" --cursor "● " --selected "○ " \
-        "Auto-detect (Recommended)" \
-        "NVIDIA (Proprietary)" \
-        "NVIDIA (Open Kernel)" \
-        "AMD/ATI (Open Source)" \
-        "Intel (Open Source)")
+    echo ""
+    gum style --border normal --padding "1 2" "GPU Driver"
+    echo "Select your GPU driver:"
+    
+    gpu_options=(
+        "Auto-detect (Recommended)"
+        "AMD/ATI (Open Source)"
+        "Intel (Open Source)"
+        "NVIDIA (Open Kernel)"
+        "NVIDIA (Proprietary)"
+    )
+    
+    GPU_CHOICE=$(select_from_list "GPU" "${gpu_options[@]}")
     
     case "$GPU_CHOICE" in
         "NVIDIA (Proprietary)") GPU_DRIVER="nvidia" ;;
@@ -138,13 +266,14 @@ configure() {
     esac
     
     echo ""
-    gum style --border normal --padding "1" "Available Drives:"
-    lsblk -d -n -o NAME,SIZE,TYPE,MODEL | awk '{print NR". /dev/"$1" ("$2", "$3")"}'
+    gum style --border normal --padding "1 2" "Drive Selection"
+    echo "Available drives:"
+    lsblk -d -n -o NAME,SIZE,TYPE,MODEL | awk '{print $1": "$2" ("$3")"}'
     
     local drive_count
     drive_count=$(lsblk -d -n -o NAME | wc -l)
     
-    DRIVE_NUM=$(gum input --placeholder "1" --value "1" --header "Drive Number")
+    DRIVE_NUM=$(gum input --placeholder "1" --value "1" --header "Drive Number (1-$drive_count)")
     : "${DRIVE_NUM:=1}"
     
     if [[ "$DRIVE_NUM" -lt 1 ]] || [[ "$DRIVE_NUM" -gt "$drive_count" ]]; then
@@ -158,7 +287,11 @@ configure() {
         exit 1
     fi
     
-    WIPE_DRIVE=$(gum confirm --default=false --prompt.accept "Yes, wipe drive" --prompt.reject "No, keep data" "Wipe drive completely?")
+    gum style --border normal --padding "1 2" "WARNING!"
+    echo "Drive: $DRIVE"
+    echo ""
+    WIPE_CHOICE=$(gum confirm --default=false --affirm "Yes, wipe drive" --dismiss "No, keep data" "Wipe drive completely?")
+    WIPE_DRIVE="$WIPE_CHOICE"
 }
 
 show_summary() {
@@ -169,7 +302,7 @@ show_summary() {
         "Hostname:     $HOSTNAME" \
         "Username:     $USERNAME" \
         "Drive:        $DRIVE" \
-        "Wipe:         $([ "$WIPE_DRIVE" = true ] && echo "Yes" || echo "No")" \
+        "Wipe:         $([ "$WIPE_DRIVE" = "true" ] && echo "Yes" || echo "No")" \
         "Locale:       $LOCALE" \
         "Timezone:     $TIMEZONE" \
         "Keyboard:     $KEYBOARD" \
@@ -178,7 +311,7 @@ show_summary() {
         "Kernel:       linux-zen"
     
     local confirm
-    confirm=$(gum confirm --default=false --prompt.accept "Proceed" --prompt.reject "Cancel" "Proceed with installation?")
+    confirm=$(gum confirm --default=false --affirm "Proceed" --dismiss "Cancel" "Proceed with installation?")
     
     if [[ "$confirm" != "true" ]]; then
         info "Installation cancelled"
@@ -460,7 +593,7 @@ main() {
         ""
     
     local reboot_now
-    reboot_now=$(gum confirm --default=true --prompt.accept "Reboot" --prompt.reject "Stay" "Reboot now?")
+    reboot_now=$(gum confirm --default=true --affirm "Reboot" --dismiss "Stay" "Reboot now?")
     
     if [[ "$reboot_now" == "true" ]]; then
         reboot
