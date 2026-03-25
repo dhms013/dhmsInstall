@@ -130,6 +130,7 @@ configure() {
     IFS=$'\n' sorted_other=($(sort <<<"${other_locales[*]}")); unset IFS
     all_locales=("${locales[@]}" "${sorted_other[@]}")
     LOCALE_CHOICE=$(printf '%s\n' "${all_locales[@]}" | gum choose --header "Language" --cursor "> ")
+    : "${LOCALE_CHOICE:=en_US.UTF-8 (English, US) ⭐}"
     LOCALE="${LOCALE_CHOICE%% (*}"
     print_config "Language" "$LOCALE"
     
@@ -168,6 +169,7 @@ configure() {
     
     IFS=$'\n' sorted_timezones=($(sort <<<"${timezones[*]}")); unset IFS
     TIMEZONE_CHOICE=$(printf '%s\n' "${sorted_timezones[@]}" | gum choose --header "Timezone" --cursor "> ")
+    : "${TIMEZONE_CHOICE:=America/New_York (US Eastern)}"
     TIMEZONE="${TIMEZONE_CHOICE%% (*}"
     print_config "Timezone" "$TIMEZONE"
     
@@ -195,6 +197,7 @@ configure() {
     IFS=$'\n' sorted_other=($(sort <<<"${other_keyboards[*]}")); unset IFS
     all_keyboards=("${keyboards[@]}" "${sorted_other[@]}")
     KEYBOARD_CHOICE=$(printf '%s\n' "${all_keyboards[@]}" | gum choose --header "Keyboard" --cursor "> ")
+    : "${KEYBOARD_CHOICE:=us (US English) ⭐}"
     KEYBOARD="${KEYBOARD_CHOICE%% (*}"
     print_config "Keyboard" "$KEYBOARD"
     
@@ -220,7 +223,9 @@ configure() {
     )
     
     IFS=$'\n' sorted_mirrors=($(sort <<<"${mirror_regions[*]}")); unset IFS
-    MIRROR_REGION=$(printf '%s\n' "${sorted_mirrors[@]}" | gum choose --header "Mirror" --cursor "> ")
+    MIRROR_CHOICE=$(printf '%s\n' "${sorted_mirrors[@]}" | gum choose --header "Mirror" --cursor "> ")
+    : "${MIRROR_CHOICE:=United States}"
+    MIRROR_REGION="$MIRROR_CHOICE"
     print_config "Mirror" "$MIRROR_REGION"
     
     echo ""
@@ -236,6 +241,7 @@ configure() {
     )
     
     GPU_CHOICE=$(printf '%s\n' "${gpu_options[@]}" | gum choose --header "GPU" --cursor "> ")
+    : "${GPU_CHOICE:=Auto-detect (Recommended)}"
     
     case "$GPU_CHOICE" in
         "NVIDIA (Proprietary)") GPU_DRIVER="nvidia" ;;
