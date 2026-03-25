@@ -446,7 +446,7 @@ set -e
 
 pacman -Sy --noconfirm
 
-pacman -S --noconfirm \
+    pacman -S --noconfirm \
     pipewire pipewire-alsa pipewire-jack pipewire-pulse \
     wireplumber gst-plugin-pipewire libpulse \
     bluez bluez-utils \
@@ -454,8 +454,7 @@ pacman -S --noconfirm \
     xdg-desktop-portal-hyprland \
     qt5-wayland qt6-wayland \
     polkit-kde-agent grim slurp \
-    sddm sddm-kcm \
-    zsh zsh-completions \
+    sddm \
     btop fastfetch \
     zram-generator
 
@@ -552,18 +551,19 @@ main() {
     configure
     show_summary
     
-    {
-        partition
-        install_base
-        copy_network
-        configure_system
-        create_users
-        install_packages
-        setup_swap
-        install_limine
-        run_post_install
-        cleanup
-    } | gum spin --title "Installing..." --show-output --spinner line
+    clear
+    gum style --border thick --padding "2" -- "Installing..."
+    
+    partition
+    install_base
+    copy_network
+    configure_system
+    create_users
+    install_packages
+    setup_swap
+    install_limine
+    run_post_install
+    cleanup
     
     gum style --border thick --padding "2" \
         "" \
