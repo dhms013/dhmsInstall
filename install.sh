@@ -249,10 +249,21 @@ configure() {
     echo ""
     print_section "Drive Selection"
     echo "Available drives:"
-    lsblk -d -n -o NAME,SIZE,TYPE,MODEL | awk '{print "  " $1 ": " $2 " (" $3 ")"}'
     
-    local drive_count
-    drive_count=$(lsblk -d -n -o NAME | wc -l)
+    mapfile -t DRIVES < <(lsblk -d -n -o NAME,SIZE,TYPE,MODEL | grep -E '^(sd|nvme|vd|dasd)' | awk '{print $1":"$2":"$3":"$4}')
+    
+    for i in "${!DRIVES[@]}"; do
+        IFS=':' read -r name size type model <<< "${DRIVES[$i]}"
+        echo "  $((i+1)). /dev/$name ($size)"
+        [[ -n "$model" ]] && echo "     Model: $model"
+    done
+    
+    local drive_count=${#DRIVES[@]}
+    
+    if [[ $drive_count -eq 0 ]]; then
+        error "No drives found"
+        exit 1
+    fi
     
     DRIVE_NUM=$(gum input --placeholder "1" --header "Drive number (1-$drive_count)")
     : "${DRIVE_NUM:=1}"
@@ -261,7 +272,8 @@ configure() {
         DRIVE_NUM=1
     fi
     
-    DRIVE="/dev/$(lsblk -d -n -o NAME | sed -n "${DRIVE_NUM}p")"
+    IFS=':' read -r name size type model <<< "${DRIVES[$((DRIVE_NUM-1))]}"
+    DRIVE="/dev/$name"
     
     if [[ ! -b "$DRIVE" ]]; then
         error "Invalid drive selection"
