@@ -1,482 +1,572 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
-# install.sh — Opinionated Arch Linux Installer with Hyprland
+# install.sh — dhmsInstall: Arch Linux Installer (Hyprland Edition)
 # ─────────────────────────────────────────────────────────────────────────────
 # Usage: curl -fsSL https://raw.githubusercontent.com/dhms013/dhmsInstall/main/install.sh | bash
 # ─────────────────────────────────────────────────────────────────────────────
+
 set -euo pipefail
 
-POST_INSTALL_URL="https://raw.githubusercontent.com/dhms013/dhmsInstall/main/install.sh"
+# ─── Globals ──────────────────────────────────────────────────────────────────
+HOSTNAME=""
+USERNAME=""
+USER_PASSWORD=""
+ROOT_PASSWORD=""
+LOCALE="en_US.UTF-8"
+TIMEZONE="Asia/Jakarta"
+KEYBOARD="us"
+MIRROR_REGION="Indonesia"
+GPU_DRIVER="auto"
+DRIVE=""
+PART_BOOT=""
+PART_ROOT=""
+ROOT_PARTUUID=""
 
-install_gum() {
-    if command -v gum &>/dev/null; then
-        return 0
-    fi
-    echo "[INFO] Installing gum..."
-    pacman -Sy --noconfirm gum
-    echo "[OK] gum installed"
-}
-
-info() { gum log --level info "$1" 2>/dev/null || echo "[INFO] $1"; }
-warn() { gum log --level warn "$1" 2>/dev/null || echo "[WARN] $1"; }
+# ─── Logging helpers ──────────────────────────────────────────────────────────
+info() { gum log --level info "$1" 2>/dev/null || echo "[INFO]  $1"; }
+warn() { gum log --level warn "$1" 2>/dev/null || echo "[WARN]  $1"; }
 error() { gum log --level error "$1" 2>/dev/null || echo "[ERROR] $1"; }
-success() { gum log --level info "✓ $1" 2>/dev/null || echo "[OK] $1"; }
+success() { gum log --level info "✓ $1" 2>/dev/null || echo "[OK]    $1"; }
 
+# ─── Sanity checks ────────────────────────────────────────────────────────────
 check_root() {
-    if [[ $EUID -ne 0 ]]; then
-        error "This script must be run as root"
-        exit 1
-    fi
+  [[ $EUID -eq 0 ]] || {
+    echo "[ERROR] Run as root"
+    exit 1
+  }
 }
 
 check_arch() {
-    if ! command -v pacman &>/dev/null; then
-        error "This script must be run from Arch Linux live environment"
-        exit 1
-    fi
+  command -v pacman &>/dev/null || {
+    echo "[ERROR] Not an Arch environment"
+    exit 1
+  }
 }
 
+install_gum() {
+  command -v gum &>/dev/null && return 0
+  echo "[INFO] Installing gum..."
+  pacman -Sy --noconfirm gum
+  success "gum installed"
+}
+
+# ─── GPU auto-detect ──────────────────────────────────────────────────────────
 detect_gpu() {
-    if lspci | grep -qi nvidia; then
-        GPU_DRIVER="nvidia"
-    elif lspci | grep -qi amd; then
-        GPU_DRIVER="amdgpu"
-    elif lspci | grep -qi intel; then
-        GPU_DRIVER="intel"
-    else
-        GPU_DRIVER="auto"
-    fi
+  if lspci 2>/dev/null | grep -qi nvidia; then
+    GPU_DRIVER="nvidia"
+  elif lspci 2>/dev/null | grep -qi " amd\| ati\|radeon"; then
+    GPU_DRIVER="amdgpu"
+  elif lspci 2>/dev/null | grep -qi intel; then
+    GPU_DRIVER="intel"
+  else
+    GPU_DRIVER="mesa"
+  fi
 }
 
+# ─── Banner ───────────────────────────────────────────────────────────────────
 print_banner() {
-    gum style --border thick --padding "2" \
-        "" \
-        "  Arch Linux Installer (Hyprland Edition)  " \
-        "" \
-        "  ⚠️  EXPERIMENTAL - USE AT YOUR OWN RISK ⚠️  " \
-        ""
+  clear
+  gum style \
+    --border double \
+    --border-foreground 99 \
+    --padding "1 4" \
+    --margin "1 2" \
+    --bold \
+    "  dhmsInstall — Arch Linux (Hyprland Edition)  " \
+    "" \
+    "  ⚠  EXPERIMENTAL — USE AT YOUR OWN RISK  ⚠  "
+  echo ""
 }
 
-print_section() {
-    local title="$1"
-    gum style --border normal --padding "1" "$title"
+# ─────────────────────────────────────────────────────────────────────────────
+# Configuration prompts
+# ─────────────────────────────────────────────────────────────────────────────
+
+ask_hostname() {
+  HOSTNAME=$(gum input \
+    --placeholder "archlinux" \
+    --header "  Hostname" \
+    --header.foreground 99 \
+    --prompt "> " \
+    --value "${HOSTNAME:-}")
+  : "${HOSTNAME:=archlinux}"
 }
 
-print_config() {
-    local key="$1"
-    local value="$2"
-    gum style --faint "  $key:" && echo " $value"
+ask_username() {
+  USERNAME=$(gum input \
+    --placeholder "arch" \
+    --header "  Username" \
+    --header.foreground 99 \
+    --prompt "> " \
+    --value "${USERNAME:-}")
+  : "${USERNAME:=arch}"
 }
 
+ask_password() {
+  while true; do
+    USER_PASSWORD=$(gum input \
+      --password \
+      --placeholder "Enter user password" \
+      --header "  User Password" \
+      --header.foreground 99 \
+      --prompt "> ")
+    [[ -n "$USER_PASSWORD" ]] && break
+    warn "Password cannot be empty"
+  done
+
+  local confirm
+  confirm=$(gum input \
+    --password \
+    --placeholder "Confirm user password" \
+    --header "  Confirm User Password" \
+    --header.foreground 99 \
+    --prompt "> ")
+  if [[ "$USER_PASSWORD" != "$confirm" ]]; then
+    warn "Passwords do not match, try again"
+    ask_password
+    return
+  fi
+
+  ROOT_PASSWORD=$(gum input \
+    --password \
+    --placeholder "Leave empty to use same as user" \
+    --header "  Root Password (optional)" \
+    --header.foreground 99 \
+    --prompt "> ")
+  : "${ROOT_PASSWORD:=$USER_PASSWORD}"
+}
+
+ask_locale() {
+  local all_locales=(
+    "en_US.UTF-8"
+    "en_GB.UTF-8"
+    "en_AU.UTF-8"
+    "id_ID.UTF-8"
+    "de_DE.UTF-8"
+    "fr_FR.UTF-8"
+    "es_ES.UTF-8"
+    "pt_BR.UTF-8"
+    "pt_PT.UTF-8"
+    "it_IT.UTF-8"
+    "ru_RU.UTF-8"
+    "ja_JP.UTF-8"
+    "zh_CN.UTF-8"
+    "zh_TW.UTF-8"
+    "ko_KR.UTF-8"
+    "th_TH.UTF-8"
+    "tr_TR.UTF-8"
+    "pl_PL.UTF-8"
+    "nl_NL.UTF-8"
+  )
+  LOCALE=$(printf '%s\n' "${all_locales[@]}" |
+    gum choose \
+      --header "  Select Locale" \
+      --header.foreground 99 \
+      --cursor "> " \
+      --selected "${LOCALE:-en_US.UTF-8}")
+  : "${LOCALE:=en_US.UTF-8}"
+}
+
+ask_timezone() {
+  # Two-step: region → city (reads from real zoneinfo)
+  local regions=(
+    "Africa" "America" "Antarctica" "Arctic"
+    "Asia" "Atlantic" "Australia" "Europe"
+    "Indian" "Pacific" "UTC"
+  )
+  local region
+  region=$(printf '%s\n' "${regions[@]}" |
+    gum choose \
+      --header "  Select Timezone Region" \
+      --header.foreground 99 \
+      --cursor "> " \
+      --selected "Asia")
+  : "${region:=Asia}"
+
+  if [[ "$region" == "UTC" ]]; then
+    TIMEZONE="UTC"
+    return
+  fi
+
+  local cities=()
+  while IFS= read -r city; do
+    cities+=("$city")
+  done < <(find "/usr/share/zoneinfo/$region" -maxdepth 1 -type f 2>/dev/null |
+    sed "s|/usr/share/zoneinfo/$region/||" | sort)
+
+  if [[ ${#cities[@]} -eq 0 ]]; then
+    TIMEZONE="UTC"
+    return
+  fi
+
+  local city
+  city=$(printf '%s\n' "${cities[@]}" |
+    gum choose \
+      --header "  Select City — $region" \
+      --header.foreground 99 \
+      --cursor "> ")
+  : "${city:=Jakarta}"
+  TIMEZONE="${region}/${city}"
+}
+
+ask_keyboard() {
+  local keyboards=(
+    "us" "uk" "de" "fr" "es" "pt" "it"
+    "ru" "br" "dvorak" "colemak" "jp106"
+    "la-latin1" "nl" "pl" "ro" "sv-latin1" "tr"
+  )
+  KEYBOARD=$(printf '%s\n' "${keyboards[@]}" |
+    gum choose \
+      --header "  Select Keyboard Layout" \
+      --header.foreground 99 \
+      --cursor "> " \
+      --selected "${KEYBOARD:-us}")
+  : "${KEYBOARD:=us}"
+}
+
+ask_mirror() {
+  local regions=(
+    "Argentina" "Australia" "Austria" "Bangladesh" "Belarus" "Belgium"
+    "Bolivia" "Brazil" "Bulgaria" "Canada" "Chile" "China" "Colombia"
+    "Croatia" "Czech Republic" "Denmark" "Ecuador" "Finland" "France"
+    "Germany" "Greece" "Hungary" "Iceland" "India" "Indonesia" "Iran"
+    "Ireland" "Israel" "Italy" "Japan" "Kazakhstan" "Kenya" "Latvia"
+    "Lithuania" "Luxembourg" "Malaysia" "Mexico" "Netherlands"
+    "New Zealand" "Norway" "Pakistan" "Paraguay" "Peru" "Philippines"
+    "Poland" "Portugal" "Romania" "Russia" "Serbia" "Singapore"
+    "Slovakia" "Slovenia" "South Africa" "South Korea" "Spain" "Sweden"
+    "Switzerland" "Taiwan" "Thailand" "Turkey" "Ukraine" "United Kingdom"
+    "United States" "Uruguay" "Vietnam"
+  )
+  MIRROR_REGION=$(printf '%s\n' "${regions[@]}" |
+    gum choose \
+      --header "  Select Mirror Region (closest to you)" \
+      --header.foreground 99 \
+      --cursor "> " \
+      --selected "${MIRROR_REGION:-Indonesia}")
+  : "${MIRROR_REGION:=Indonesia}"
+}
+
+ask_gpu() {
+  local gpu_options=(
+    "Auto-detect (Recommended)"
+    "AMD / ATI  —  amdgpu (open source)"
+    "Intel      —  intel  (open source)"
+    "NVIDIA     —  nvidia-open (open kernel)"
+    "NVIDIA     —  nvidia  (proprietary)"
+  )
+  local choice
+  choice=$(printf '%s\n' "${gpu_options[@]}" |
+    gum choose \
+      --header "  Select GPU Driver" \
+      --header.foreground 99 \
+      --cursor "> ")
+  : "${choice:=Auto-detect (Recommended)}"
+
+  case "$choice" in
+  *"nvidia  (proprietary)"*) GPU_DRIVER="nvidia" ;;
+  *"nvidia-open"*) GPU_DRIVER="nvidia-open" ;;
+  *"amdgpu"*) GPU_DRIVER="amdgpu" ;;
+  *"intel"*) GPU_DRIVER="intel" ;;
+  *) detect_gpu ;;
+  esac
+}
+
+ask_drive() {
+  local drives=()
+  local labels=()
+
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+    local name size type model
+    read -r name size type model <<<"$line"
+    [[ "$type" == "rom" ]] && continue
+    [[ "$type" == "loop" ]] && continue
+    [[ "$name" =~ ^loop ]] && continue
+    [[ "$name" =~ ^sr ]] && continue
+    [[ "$name" =~ ^dm- ]] && continue
+    drives+=("/dev/$name")
+    labels+=("/dev/$name  ($size)  ${model:-Unknown}")
+  done < <(lsblk -d -n -o NAME,SIZE,TYPE,MODEL 2>/dev/null)
+
+  if [[ ${#drives[@]} -eq 0 ]]; then
+    error "No drives detected"
+    exit 1
+  fi
+
+  local selected_label
+  selected_label=$(printf '%s\n' "${labels[@]}" |
+    gum choose \
+      --header "  ⚠  Select Installation Drive  (ALL DATA WILL BE WIPED)" \
+      --header.foreground 196 \
+      --cursor "> ")
+
+  local i
+  for i in "${!labels[@]}"; do
+    if [[ "${labels[$i]}" == "$selected_label" ]]; then
+      DRIVE="${drives[$i]}"
+      break
+    fi
+  done
+
+  [[ -b "$DRIVE" ]] || {
+    error "Invalid drive: $DRIVE"
+    exit 1
+  }
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Menu-driven configuration (archinstall-style)
+# ─────────────────────────────────────────────────────────────────────────────
 configure() {
-    echo ""
-    print_section "Hostname"
-    HOSTNAME=$(gum input --placeholder "archlinux" --header "Enter hostname")
-    : "${HOSTNAME:=archlinux}"
-    print_config "Hostname" "$HOSTNAME"
-    
-    echo ""
-    print_section "Username"
-    USERNAME=$(gum input --placeholder "arch" --header "Enter username")
-    : "${USERNAME:=arch}"
-    print_config "Username" "$USERNAME"
-    
-    echo ""
-    print_section "Password"
-    USER_PASSWORD=$(gum input --password --placeholder "User password" --header "Enter password")
-    while [[ -z "$USER_PASSWORD" ]]; do
-        warn "Password cannot be empty"
-        USER_PASSWORD=$(gum input --password --placeholder "User password" --header "Enter password")
-    done
-    print_config "Password" "********"
-    
-    ROOT_PASSWORD=$(gum input --password --placeholder "Root password (Enter for same)" --header "Enter root password")
-    : "${ROOT_PASSWORD:=$USER_PASSWORD}"
-    print_config "Root password" "********"
-    
-    echo ""
-    print_section "Language"
-    echo "Select your preferred language:"
-    
-    locales=(
-        "en_US.UTF-8 (English, US) ⭐"
+  while true; do
+    clear
+    print_banner
+
+    local pw_display="${USER_PASSWORD:+[set]}"
+    pw_display="${pw_display:-not set}"
+
+    local menu_items=(
+      "  Hostname      ›  ${HOSTNAME:-not set}"
+      "  Username      ›  ${USERNAME:-not set}"
+      "  Password      ›  ${pw_display}"
+      "  Locale        ›  ${LOCALE}"
+      "  Timezone      ›  ${TIMEZONE}"
+      "  Keyboard      ›  ${KEYBOARD}"
+      "  Mirror        ›  ${MIRROR_REGION}"
+      "  GPU Driver    ›  ${GPU_DRIVER}"
+      "  Drive         ›  ${DRIVE:-not set}"
+      "  ─────────────────────────────────"
+      "  ✓  Start Installation"
     )
-    
-    other_locales=(
-        "en_GB.UTF-8 (English, UK)"
-        "en_AU.UTF-8 (English, Australia)"
-        "de_DE.UTF-8 (German, Germany)"
-        "de_AT.UTF-8 (German, Austria)"
-        "de_CH.UTF-8 (German, Switzerland)"
-        "fr_FR.UTF-8 (French, France)"
-        "fr_CA.UTF-8 (French, Canada)"
-        "es_ES.UTF-8 (Spanish, Spain)"
-        "es_MX.UTF-8 (Spanish, Mexico)"
-        "pt_BR.UTF-8 (Portuguese, Brazil)"
-        "pt_PT.UTF-8 (Portuguese, Portugal)"
-        "it_IT.UTF-8 (Italian, Italy)"
-        "ru_RU.UTF-8 (Russian, Russia)"
-        "ja_JP.UTF-8 (Japanese, Japan)"
-        "zh_CN.UTF-8 (Chinese, Simplified)"
-        "zh_TW.UTF-8 (Chinese, Traditional)"
-        "ko_KR.UTF-8 (Korean, South Korea)"
-        "id_ID.UTF-8 (Indonesian, Indonesia)"
-        "th_TH.UTF-8 (Thai, Thailand)"
-        "tr_TR.UTF-8 (Turkish, Turkey)"
-        "pl_PL.UTF-8 (Polish, Poland)"
-        "nl_NL.UTF-8 (Dutch, Netherlands)"
-    )
-    
-    IFS=$'\n' sorted_other=($(sort <<<"${other_locales[*]}")); unset IFS
-    all_locales=("${locales[@]}" "${sorted_other[@]}")
-    LOCALE_CHOICE=$(printf '%s\n' "${all_locales[@]}" | gum choose --header "Language" --cursor "> ")
-    : "${LOCALE_CHOICE:=en_US.UTF-8 (English, US) ⭐}"
-    LOCALE="${LOCALE_CHOICE%% (*}"
-    print_config "Language" "$LOCALE"
-    
-    echo ""
-    print_section "Timezone"
-    echo "Select your timezone:"
-    
-    timezones=(
-        "America/New_York (US Eastern)"
-        "America/Chicago (US Central)"
-        "America/Denver (US Mountain)"
-        "America/Los_Angeles (US Pacific)"
-        "America/Toronto (Canada Eastern)"
-        "America/Vancouver (Canada Pacific)"
-        "America/Mexico_City (Mexico)"
-        "America/Sao_Paulo (Brazil)"
-        "Europe/London (UK)"
-        "Europe/Paris (France)"
-        "Europe/Berlin (Germany)"
-        "Europe/Madrid (Spain)"
-        "Europe/Rome (Italy)"
-        "Europe/Moscow (Russia)"
-        "Europe/Istanbul (Turkey)"
-        "Asia/Tokyo (Japan)"
-        "Asia/Shanghai (China)"
-        "Asia/Hong_Kong (Hong Kong)"
-        "Asia/Taipei (Taiwan)"
-        "Asia/Seoul (South Korea)"
-        "Asia/Singapore (Singapore)"
-        "Asia/Jakarta (Indonesia)"
-        "Asia/Bangkok (Thailand)"
-        "Australia/Sydney (Australia Eastern)"
-        "Australia/Perth (Australia Western)"
-        "Pacific/Auckland (New Zealand)"
-    )
-    
-    IFS=$'\n' sorted_timezones=($(sort <<<"${timezones[*]}")); unset IFS
-    TIMEZONE_CHOICE=$(printf '%s\n' "${sorted_timezones[@]}" | gum choose --header "Timezone" --cursor "> ")
-    : "${TIMEZONE_CHOICE:=America/New_York (US Eastern)}"
-    TIMEZONE="${TIMEZONE_CHOICE%% (*}"
-    print_config "Timezone" "$TIMEZONE"
-    
-    echo ""
-    print_section "Keyboard Layout"
-    echo "Select your keyboard layout:"
-    
-    keyboards=(
-        "us (US English) ⭐"
-    )
-    
-    other_keyboards=(
-        "uk (UK English)"
-        "de (German)"
-        "fr (French)"
-        "es (Spanish)"
-        "pt (Portuguese)"
-        "it (Italian)"
-        "ru (Russian)"
-        "jp (Japanese)"
-        "br (Brazilian)"
-        "dvorak (Dvorak)"
-    )
-    
-    IFS=$'\n' sorted_other=($(sort <<<"${other_keyboards[*]}")); unset IFS
-    all_keyboards=("${keyboards[@]}" "${sorted_other[@]}")
-    KEYBOARD_CHOICE=$(printf '%s\n' "${all_keyboards[@]}" | gum choose --header "Keyboard" --cursor "> ")
-    : "${KEYBOARD_CHOICE:=us (US English) ⭐}"
-    KEYBOARD="${KEYBOARD_CHOICE%% (*}"
-    print_config "Keyboard" "$KEYBOARD"
-    
-    echo ""
-    print_section "Mirror Region"
-    echo "Select the mirror region (closest to you):"
-    
-    mirror_regions=(
-        "Argentina" "Australia" "Austria" "Bangladesh" "Belarus"
-        "Belgium" "Bolivia" "Brazil" "Bulgaria" "Canada"
-        "Chile" "China" "Colombia" "Costa Rica" "Croatia"
-        "Czech Republic" "Denmark" "Ecuador" "Finland" "France"
-        "Germany" "Greece" "Hungary" "Iceland" "India"
-        "Indonesia" "Iran" "Ireland" "Israel" "Italy"
-        "Japan" "Kazakhstan" "Kenya" "Latvia" "Lithuania"
-        "Luxembourg" "Macedonia" "Malaysia" "Mexico" "Netherlands"
-        "New Zealand" "Nicaragua" "Norway" "Pakistan" "Paraguay"
-        "Peru" "Philippines" "Poland" "Portugal" "Romania"
-        "Russia" "Serbia" "Singapore" "Slovakia" "Slovenia"
-        "South Africa" "South Korea" "Spain" "Sweden" "Switzerland"
-        "Taiwan" "Thailand" "Turkey" "Ukraine" "United Kingdom"
-        "United States" "Uruguay" "Vietnam"
-    )
-    
-    IFS=$'\n' sorted_mirrors=($(sort <<<"${mirror_regions[*]}")); unset IFS
-    MIRROR_CHOICE=$(printf '%s\n' "${sorted_mirrors[@]}" | gum choose --header "Mirror" --cursor "> ")
-    : "${MIRROR_CHOICE:=United States}"
-    MIRROR_REGION="$MIRROR_CHOICE"
-    print_config "Mirror" "$MIRROR_REGION"
-    
-    echo ""
-    print_section "GPU Driver"
-    echo "Select your GPU driver:"
-    
-    gpu_options=(
-        "Auto-detect (Recommended)"
-        "AMD/ATI (Open Source)"
-        "Intel (Open Source)"
-        "NVIDIA (Open Kernel)"
-        "NVIDIA (Proprietary)"
-    )
-    
-    GPU_CHOICE=$(printf '%s\n' "${gpu_options[@]}" | gum choose --header "GPU" --cursor "> ")
-    : "${GPU_CHOICE:=Auto-detect (Recommended)}"
-    
-    case "$GPU_CHOICE" in
-        "NVIDIA (Proprietary)") GPU_DRIVER="nvidia" ;;
-        "NVIDIA (Open Kernel)") GPU_DRIVER="nvidia-open" ;;
-        "AMD/ATI (Open Source)") GPU_DRIVER="amdgpu" ;;
-        "Intel (Open Source)") GPU_DRIVER="intel" ;;
-        *) detect_gpu ;;
+
+    local choice
+    choice=$(printf '%s\n' "${menu_items[@]}" |
+      gum choose \
+        --header "  ↑↓ Navigate   Enter = Select   (set all fields before installing)" \
+        --header.foreground 99 \
+        --cursor "> " \
+        --height 20)
+
+    case "$choice" in
+    *Hostname*) ask_hostname ;;
+    *Username*) ask_username ;;
+    *Password*) ask_password ;;
+    *Locale*) ask_locale ;;
+    *Timezone*) ask_timezone ;;
+    *Keyboard*) ask_keyboard ;;
+    *Mirror*) ask_mirror ;;
+    *"GPU Driver"*) ask_gpu ;;
+    *Drive*) ask_drive ;;
+    *"Start Installation"*)
+      if [[ -z "$HOSTNAME" || -z "$USERNAME" || -z "$USER_PASSWORD" || -z "$DRIVE" ]]; then
+        warn "Please set Hostname, Username, Password, and Drive before continuing"
+        sleep 2
+        continue
+      fi
+      return 0
+      ;;
+    *──*) continue ;;
     esac
-    print_config "GPU Driver" "$GPU_DRIVER"
-    
-    echo ""
-    print_section "Drive Selection"
-    echo "Available drives:"
-    echo ""
-    
-    local drives=()
-    local drive_size=()
-    local drive_model=()
-    local i=0
-    
-    while read -r name size type model; do
-        [[ -z "$name" ]] && continue
-        [[ "$type" == "rom" ]] && continue
-        [[ "$type" == "loop" ]] && continue
-        [[ "$name" =~ ^loop ]] && continue
-        [[ "$name" =~ ^sr ]] && continue
-        [[ "$name" =~ ^dm- ]] && continue
-        
-        drives+=("/dev/$name")
-        drive_size+=("$size")
-        drive_model+=("$model")
-        echo "  $((i+1)). /dev/$name ($size)"
-        [[ -n "$model" ]] && echo "      $model"
-        ((i++))
-    done < <(lsblk -d -n -o NAME,SIZE,TYPE,MODEL 2>/dev/null)
-    
-    local drive_count=${#drives[@]}
-    
-    if [[ $drive_count -eq 0 ]]; then
-        error "No drives found"
-        exit 1
-    fi
-    
-    local selected_num
-    selected_num=$(gum input --placeholder "1" --header "Select drive number (1-$drive_count)")
-    : "${selected_num:=1}"
-    
-    if [[ "$selected_num" -lt 1 ]] || [[ "$selected_num" -gt "$drive_count" ]]; then
-        selected_num=1
-    fi
-    
-    DRIVE="${drives[$((selected_num-1))]}"
-    
-    if [[ ! -b "$DRIVE" ]]; then
-        error "Invalid drive selection"
-        exit 1
-    fi
-    
-    echo ""
-    gum style --border double --padding "1" --foreground 196 "⚠️  WARNING: $DRIVE will be wiped!"
-    print_config "Drive" "$DRIVE"
-    print_config "Wipe" "Yes"
-    WIPE_DRIVE="true"
+  done
 }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Summary & confirmation
+# ─────────────────────────────────────────────────────────────────────────────
 show_summary() {
-    clear
-    gum style --border thick --padding "2" \
-        "" \
-        "  Installation Summary  " \
-        "" \
-        "  Please review your configuration  " \
-        ""
-    
-    echo ""
-    gum style --border double --padding "1 2" \
-        "" \
-        "  ⚠️  WARNING: Drive will be wiped!  " \
-        "" \
-        "  Hostname:     $HOSTNAME" \
-        "  Username:     $USERNAME" \
-        "  Drive:        $DRIVE" \
-        "  Locale:       $LOCALE" \
-        "  Timezone:     $TIMEZONE" \
-        "  Keyboard:     $KEYBOARD" \
-        "  Mirror:       $MIRROR_REGION" \
-        "  GPU Driver:   $GPU_DRIVER" \
-        "  Kernel:       linux-zen" \
-        ""
-    
-    gum confirm --default=false --affirmative "Proceed" --negative "Cancel" "Proceed with installation?" || {
-        info "Installation cancelled"
-        exit 0
-    }
+  clear
+  gum style \
+    --border double \
+    --border-foreground 196 \
+    --padding "1 3" \
+    --margin "1 2" \
+    "  ⚠  FINAL REVIEW — ALL DATA ON  $DRIVE  WILL BE LOST  ⚠  " \
+    "" \
+    "  Hostname    :  $HOSTNAME" \
+    "  Username    :  $USERNAME" \
+    "  Drive       :  $DRIVE" \
+    "  Locale      :  $LOCALE" \
+    "  Timezone    :  $TIMEZONE" \
+    "  Keyboard    :  $KEYBOARD" \
+    "  Mirror      :  $MIRROR_REGION" \
+    "  GPU Driver  :  $GPU_DRIVER" \
+    "  Kernel      :  linux-zen" \
+    "  Bootloader  :  GRUB (EFI)" \
+    "  Desktop     :  Hyprland + SDDM"
+
+  echo ""
+  gum confirm \
+    --default=false \
+    --affirmative "  ✓ Install Now  " \
+    --negative "  ← Go Back  " \
+    "Proceed with installation?"
 }
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Installation steps
+# ─────────────────────────────────────────────────────────────────────────────
 
 partition() {
-    info "Partitioning $DRIVE..."
-    wipefs -af "$DRIVE" 2>/dev/null || true
-    dd if=/dev/zero of="$DRIVE" bs=512 count=1 2>/dev/null || true
-    
-    parted -s "$DRIVE" mklabel gpt
-    parted -s "$DRIVE" mkpart primary fat32 1MiB 513MiB
-    parted -s "$DRIVE" set 1 boot on
-    parted -s "$DRIVE" set 1 esp on
-    parted -s "$DRIVE" mkpart primary ext4 513MiB 100%
-    
+  info "Partitioning $DRIVE..."
+
+  wipefs -af "$DRIVE" 2>/dev/null || true
+  dd if=/dev/zero of="$DRIVE" bs=512 count=34 2>/dev/null || true
+
+  parted -s "$DRIVE" mklabel gpt
+  parted -s "$DRIVE" mkpart ESP fat32 1MiB 513MiB
+  parted -s "$DRIVE" set 1 boot on
+  parted -s "$DRIVE" set 1 esp on
+  parted -s "$DRIVE" mkpart primary ext4 513MiB 100%
+
+  sleep 1
+  partprobe "$DRIVE" 2>/dev/null || true
+  sleep 1
+
+  if [[ "$DRIVE" =~ nvme|mmcblk ]]; then
+    PART_BOOT="${DRIVE}p1"
+    PART_ROOT="${DRIVE}p2"
+  else
     PART_BOOT="${DRIVE}1"
     PART_ROOT="${DRIVE}2"
-    
-    ROOT_PARTUUID=$(blkid -s PARTUUID -o value "$PART_ROOT")
-    
-    mkfs.fat -F 32 "$PART_BOOT"
-    mkfs.ext4 -F "$PART_ROOT"
-    
-    mount "$PART_ROOT" /mnt
-    mkdir -p /mnt/boot
-    mount "$PART_BOOT" /mnt/boot
-    
-    success "Partitions created"
+  fi
+
+  mkfs.fat -F 32 -n BOOT "$PART_BOOT"
+  mkfs.ext4 -F -L ROOT "$PART_ROOT"
+
+  mount "$PART_ROOT" /mnt
+  mkdir -p /mnt/boot
+  mount "$PART_BOOT" /mnt/boot
+
+  ROOT_PARTUUID=$(blkid -s PARTUUID -o value "$PART_ROOT")
+  success "Partitions created and mounted"
 }
 
 install_base() {
-    info "Installing base system..."
-    
-    local base_packages=(
-        "base" "linux-zen" "linux-firmware"
-        "sudo" "vim" "git" "curl"
-        "efibootmgr" "limine"
-    )
-    
-    local gpu_packages=()
-    case $GPU_DRIVER in
-        nvidia)
-            gpu_packages=(nvidia nvidia-utils nvidia-settings)
-            ;;
-        nvidia-open)
-            gpu_packages=(nvidia-open-dkms nvidia-utils)
-            ;;
-        amdgpu)
-            gpu_packages=(mesa xf86-video-amdgpu vulkan-radeon)
-            ;;
-        intel)
-            gpu_packages=(mesa xf86-video-intel intel-media-driver vulkan-intel)
-            ;;
-    esac
-    
-    pacstrap -K /mnt "${base_packages[@]}"
-    
-    if [[ ${#gpu_packages[@]} -gt 0 ]]; then
-        pacstrap -K /mnt "${gpu_packages[@]}"
-    fi
-    
-    genfstab -U /mnt > /mnt/etc/fstab
-    
-    success "Base system installed"
+  info "Updating mirrors for region: $MIRROR_REGION..."
+  pacman -Sy --noconfirm reflector 2>/dev/null || true
+  reflector \
+    --country "$MIRROR_REGION" \
+    --protocol https \
+    --sort rate \
+    --fastest 10 \
+    --age 24 \
+    --save /etc/pacman.d/mirrorlist 2>/dev/null ||
+    warn "Mirror ranking failed, using defaults"
+
+  # GPU packages — use DKMS variants for linux-zen compatibility
+  local gpu_packages=()
+  case "$GPU_DRIVER" in
+  nvidia)
+    # FIX: 'nvidia' only works with stock kernel; use nvidia-dkms for linux-zen
+    gpu_packages=(nvidia-dkms nvidia-utils nvidia-settings lib32-nvidia-utils)
+    ;;
+  nvidia-open)
+    gpu_packages=(nvidia-open-dkms nvidia-utils lib32-nvidia-utils)
+    ;;
+  amdgpu)
+    gpu_packages=(mesa xf86-video-amdgpu vulkan-radeon lib32-mesa lib32-vulkan-radeon)
+    ;;
+  intel)
+    gpu_packages=(mesa xf86-video-intel intel-media-driver vulkan-intel lib32-mesa lib32-vulkan-intel)
+    ;;
+  *)
+    gpu_packages=(mesa)
+    ;;
+  esac
+
+  local base_packages=(
+    base base-devel
+    linux-zen linux-zen-headers linux-firmware # headers needed for DKMS modules
+    sudo vim neovim git curl wget
+    networkmanager
+    efibootmgr grub os-prober
+    reflector
+  )
+
+  info "Installing base system (this may take a while)..."
+  pacstrap -K /mnt "${base_packages[@]}" "${gpu_packages[@]}"
+
+  genfstab -U /mnt >/mnt/etc/fstab
+  success "Base system installed"
 }
 
 copy_network() {
-    info "Copying network configuration..."
-    
-    if [[ -d /var/lib/iwd ]]; then
-        mkdir -p /mnt/var/lib/iwd
-        cp /var/lib/iwd/*.psk /mnt/var/lib/iwd/ 2>/dev/null || true
-    fi
-    
-    if [[ -f /etc/systemd/network ]]; then
-        mkdir -p /mnt/etc/systemd/network
-        cp /etc/systemd/network/* /mnt/etc/systemd/network/ 2>/dev/null || true
-    fi
-    
-    arch-chroot /mnt systemctl enable systemd-networkd 2>/dev/null || true
-    arch-chroot /mnt systemctl enable systemd-resolved 2>/dev/null || true
-    
-    success "Network configuration copied"
+  info "Copying network configuration..."
+  # Copy iwd wifi profiles if present (from live environment)
+  if [[ -d /var/lib/iwd ]]; then
+    mkdir -p /mnt/var/lib/iwd
+    cp /var/lib/iwd/*.psk /mnt/var/lib/iwd/ 2>/dev/null || true
+  fi
+
+  # Enable NetworkManager in the new install
+  arch-chroot /mnt systemctl enable NetworkManager
+  success "Network configured"
 }
 
 configure_system() {
-    info "Configuring system..."
-    
-    arch-chroot /mnt bash -euo pipefail <<'CHROOT'
+  info "Configuring system..."
+
+  arch-chroot /mnt bash -euo pipefail <<CHROOT
 set -e
 
-ln -sf /usr/share/zoneinfo/"${TIMEZONE}" /etc/localtime
+# Timezone
+ln -sf /usr/share/zoneinfo/${TIMEZONE} /etc/localtime
 hwclock --systohc
 
+# Locale
 sed -i "/^#${LOCALE}/s/^#//" /etc/locale.gen
 locale-gen
 echo "LANG=${LOCALE}" > /etc/locale.conf
 
+# Console keyboard
 echo "KEYMAP=${KEYBOARD}" > /etc/vconsole.conf
 
+# Hostname
 echo "${HOSTNAME}" > /etc/hostname
-cat >> /etc/hosts <<EOF
+
+# Hosts file
+cat > /etc/hosts <<HOSTS
 127.0.0.1   localhost
 ::1         localhost
 127.0.1.1   ${HOSTNAME}.localdomain ${HOSTNAME}
-EOF
+HOSTS
 
+# Pacman tweaks
 sed -i 's/^#ParallelDownloads/ParallelDownloads/' /etc/pacman.conf
-sed -i 's/^#Color$/Color/' /etc/pacman.conf
-echo "ILoveCandy" >> /etc/pacman.conf
+sed -i '/^#Color$/s/^#//' /etc/pacman.conf
+grep -q "ILoveCandy" /etc/pacman.conf || echo "ILoveCandy" >> /etc/pacman.conf
 
-echo "%wheel ALL=(ALL) ALL" >> /etc/sudoers
+# Enable multilib (for 32-bit support)
+grep -q "\[multilib\]" /etc/pacman.conf || cat >> /etc/pacman.conf <<'MULTILIB'
+[multilib]
+Include = /etc/pacman.d/mirrorlist
+MULTILIB
+
+# Wheel group sudo
+sed -i 's/^# %wheel ALL=(ALL:ALL) ALL/%wheel ALL=(ALL:ALL) ALL/' /etc/sudoers
 
 CHROOT
-    
-    success "System configured"
+
+  success "System configured"
 }
 
 create_users() {
-    info "Creating users..."
-    
-    arch-chroot /mnt useradd -m -G wheel,input,audio,video,lp -s /bin/bash "$USERNAME"
-    echo "$USERNAME:$USER_PASSWORD" | chpasswd -R /mnt
-    echo "root:$ROOT_PASSWORD" | chpasswd -R /mnt
-    
-    success "Users created"
+  info "Creating users..."
+  arch-chroot /mnt useradd -m -G wheel,input,audio,video,lp,storage -s /bin/bash "$USERNAME" 2>/dev/null || true
+  echo "${USERNAME}:${USER_PASSWORD}" | chpasswd -R /mnt
+  echo "root:${ROOT_PASSWORD}" | chpasswd -R /mnt
+  success "Users created"
 }
 
 install_packages() {
-    info "Installing packages..."
-    
-    cat >> /mnt/etc/pacman.conf <<'EOF'
+  info "Installing Hyprland and desktop packages..."
 
-[multilib]
-Include = /etc/pacman.d/mirrorlist
-EOF
-    
-    arch-chroot /mnt bash -euo pipefail <<'CHROOT'
+  arch-chroot /mnt bash -euo pipefail <<'CHROOT'
 set -e
-
 pacman -Sy --noconfirm
 
-    pacman -S --noconfirm \
+pacman -S --noconfirm --needed \
     pipewire pipewire-alsa pipewire-jack pipewire-pulse \
     wireplumber gst-plugin-pipewire libpulse \
     bluez bluez-utils \
@@ -486,121 +576,121 @@ pacman -Sy --noconfirm
     polkit-kde-agent grim slurp \
     sddm \
     btop fastfetch \
-    zram-generator
+    zram-generator \
+    ttf-jetbrains-mono-nerd noto-fonts noto-fonts-emoji
 
 systemctl enable bluetooth
 systemctl enable sddm
-
 CHROOT
-    
-    success "Packages installed"
+
+  success "Desktop packages installed"
 }
 
 setup_swap() {
-    info "Setting up swap..."
-    
-    arch-chroot /mnt bash -euo pipefail <<'CHROOT'
-set -e
-
+  info "Configuring zram swap..."
+  arch-chroot /mnt bash -euo pipefail <<'CHROOT'
 cat > /etc/systemd/zram-generator.conf <<EOF
 [zram0]
+zram-size = ram / 2
 compression-algorithm = zstd
 EOF
-
 systemctl enable systemd-zram-setup@zram0.service
-
 CHROOT
-    
-    success "Swap configured"
+  success "Swap configured"
 }
 
-install_limine() {
-    info "Installing Limine bootloader..."
-    
-    arch-chroot /mnt bash -euo pipefail <<CHROOT
-set -e
+setup_mirrors_persistent() {
+  info "Setting up reflector for mirror maintenance..."
+  cp /etc/pacman.d/mirrorlist /mnt/etc/pacman.d/mirrorlist
 
-limine-install -i
-
-mkdir -p /boot/EFI/BOOT
-cp /usr/share/limine/BOOTX64.EFI /boot/EFI/BOOT/
-cp /usr/share/limine/BOOTIA32.EFI /boot/EFI/BOOT/ 2>/dev/null || true
-
-cat > /boot/limine.cfg <<'LIMINE_EOF'
-timeout: 5
-default_entry: 0
-
-:Arch Linux
-    protocol: linux
-    kernel_path: boot:///vmlinuz-linux-zen
-    initrd_path: boot:///initramfs-linux-zen.img
-    cmdline: root=PARTUUID=${ROOT_PARTUUID} rw
-LIMINE_EOF
-
-cat > /boot/EFI/BOOT/limine.cfg <<'LIMINE_EOF'
-timeout: 5
-default_entry: 0
-
-:Arch Linux
-    protocol: linux
-    kernel_path: boot:///vmlinuz-linux-zen
-    initrd_path: boot:///initramfs-linux-zen.img
-    cmdline: root=PARTUUID=${ROOT_PARTUUID} rw
-LIMINE_EOF
-
+  arch-chroot /mnt bash -euo pipefail <<CHROOT
+mkdir -p /etc/xdg/reflector
+cat > /etc/xdg/reflector/reflector.conf <<EOF
+--country "${MIRROR_REGION}"
+--protocol https
+--sort rate
+--fastest 10
+--age 24
+--save /etc/pacman.d/mirrorlist
+EOF
+systemctl enable reflector.timer
 CHROOT
-    
-    success "Limine installed"
+
+  success "Mirror maintenance configured"
 }
 
-run_post_install() {
-    info "Running post-installation..."
-    
-    arch-chroot /mnt bash -euo pipefail <<CHROOT
-set -e
+install_bootloader() {
+  info "Installing GRUB bootloader..."
 
-curl -fsSL ${POST_INSTALL_URL} | bash
+  arch-chroot /mnt bash -euo pipefail <<'CHROOT'
+grub-install \
+    --target=x86_64-efi \
+    --efi-directory=/boot \
+    --bootloader-id=GRUB \
+    --recheck
 
+grub-mkconfig -o /boot/grub/grub.cfg
 CHROOT
-    
-    success "Post-installation completed"
+
+  success "GRUB installed"
 }
 
 cleanup() {
-    info "Cleaning up..."
-    umount -R /mnt 2>/dev/null || true
-    success "Cleanup completed"
+  info "Syncing and unmounting..."
+  sync
+  umount -R /mnt 2>/dev/null || true
+  success "Done"
 }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Main
+# ─────────────────────────────────────────────────────────────────────────────
 main() {
-    check_root
-    check_arch
-    install_gum
-    
-    print_banner
+  check_root
+  check_arch
+  install_gum
+  print_banner
+
+  # Menu-driven config (archinstall-style — keep looping until user is satisfied)
+  configure
+
+  # Show summary; go back to menu if user cancels
+  while true; do
+    show_summary && break
     configure
-    show_summary
-    
-    clear
-    gum style --border thick --padding "2" -- "Installing..."
-    
-    partition
-    install_base
-    copy_network
-    configure_system
-    create_users
-    install_packages
-    setup_swap
-    install_limine
-    run_post_install
-    cleanup
-    
-    gum style --border thick --padding "2" \
-        "" \
-        "  ✅ Installation completed successfully!  " \
-        "" \
-        "  dhmsDots will reboot when setup is complete  " \
-        ""
+  done
+
+  # ── Installation ──────────────────────────────────────────────────────────
+  clear
+  gum style \
+    --border thick \
+    --border-foreground 99 \
+    --padding "1 3" \
+    "  ⚙  Starting installation…  "
+  echo ""
+
+  partition
+  install_base
+  copy_network
+  configure_system
+  create_users
+  install_packages
+  setup_swap
+  setup_mirrors_persistent
+  install_bootloader
+  cleanup
+
+  # ── Done ──────────────────────────────────────────────────────────────────
+  echo ""
+  gum style \
+    --border double \
+    --border-foreground 76 \
+    --padding "1 4" \
+    --margin "1 2" \
+    "  ✅  Installation Complete!  " \
+    "" \
+    "  Remove the USB drive, then reboot:" \
+    "  systemctl reboot"
 }
 
 main "$@"
