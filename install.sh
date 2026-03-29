@@ -46,8 +46,10 @@ check_arch() {
 
 install_gum() {
   command -v gum &>/dev/null && return 0
+  echo "[INFO] Refreshing keyring..."
+  pacman -Sy --noconfirm archlinux-keyring
   echo "[INFO] Installing gum..."
-  pacman -Sy --noconfirm gum
+  pacman -S --noconfirm gum
   success "gum installed"
 }
 
@@ -486,7 +488,6 @@ copy_network() {
 configure_system() {
   info "Configuring system..."
 
-  # Unquoted <<CHROOT so variables expand inside
   arch-chroot /mnt bash -euo pipefail <<CHROOT
 set -e
 

@@ -58,8 +58,8 @@ System:
 
 ### From Arch Linux Live ISO
 
+Boot into Arch Linux live environment and run:
 ```bash
-# Boot into Arch Linux live environment and run:
 curl -fsSL https://raw.githubusercontent.com/dhms013/dhmsInstall/main/install.sh | bash
 ```
 
